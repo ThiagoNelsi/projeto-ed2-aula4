@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 typedef struct {
     int primeiro_dispo;
@@ -56,7 +55,6 @@ int busca_espaco_livre_na_lista(FILE * fp, int tamanho) {
 
     while(1) {
         printf("%d\n", posicao_atual);
-        sleep(1);
         if (posicao_atual == -1) {
             fseek(fp, posicao_inicial, SEEK_SET);
             return -1;

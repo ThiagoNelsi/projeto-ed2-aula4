@@ -2,6 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define INSERIR 1
+#define REMOVER 2
+#define COMPACTAR 3
+
 typedef struct {
     int primeiro_dispo;
 } dispo;
@@ -10,6 +14,8 @@ typedef struct {
     int proximo_reg;
     char buffer[139]; 
 } registro;
+
+char astesrisco = '*';
 
 void intToChar3(int number, char *result) {
     if (number >= 0 && number <= 999) {
@@ -36,7 +42,7 @@ registro * ler_registro(FILE * fp, int byte_offset) {
 
     fread(reg->buffer, sizeof(char), tam_buffer, fp);
     if (reg->buffer[0] == '*') {
-        printf("Registro removido.\n");
+        // printf("Registro removido.\n");
         return NULL;
     }
 
@@ -48,10 +54,8 @@ int busca_espaco_livre_na_lista(FILE * fp, int tamanho) {
 
     rewind(fp);
 
-    int inicio_lista;
-    fread(&inicio_lista, sizeof(int), 1, fp);
-
-    int posicao_atual = inicio_lista; // i
+    int posicao_atual;
+    fread(&posicao_atual, sizeof(int), 1, fp);
 
     while(1) {
         printf("%d\n", posicao_atual);
@@ -65,7 +69,10 @@ int busca_espaco_livre_na_lista(FILE * fp, int tamanho) {
 
         // (INT)*(PROX)
 
-        if(tam_buffer >= tamanho) {
+        if(tam_buffer >= tamanho + 2*sizeof(int) + sizeof(char)) {
+            fseek(fp, posicao_inicial, SEEK_SET);
+            return posicao_atual;
+        } else if (tam_buffer == tamanho) {
             fseek(fp, posicao_inicial, SEEK_SET);
             return posicao_atual;
         } else {
@@ -95,6 +102,7 @@ void reorganizar_lista(FILE *fp, int removido) {
     fread(&inicio_lista, sizeof(int), 1, fp);
 
     if (inicio_lista == removido) {
+        printf("inicio da lista\n");
         fseek(fp, inicio_lista + sizeof(int) + sizeof(char), SEEK_SET);
         int prox;
         fread(&prox, sizeof(int), 1, fp);
@@ -104,7 +112,6 @@ void reorganizar_lista(FILE *fp, int removido) {
         fseek(fp, posicao_inicial, SEEK_SET);
         return;
     }
-    exit(0);
 
     int posicao_atual = inicio_lista;
     while (1) {
@@ -160,7 +167,7 @@ int main() {
     int funcao;
     scanf("%d", &funcao);
 
-    if (funcao == 1) {
+    if (funcao == INSERIR) {
         printf("Código:\n");
         scanf("%d", &codigo);
 
@@ -187,16 +194,57 @@ int main() {
         printf("byte offset %d\n", byte_offset);
 
         fseek(fp, 0, SEEK_END);
+        // meio
         if (ftell(fp) != byte_offset) {
     	    reorganizar_lista(fp, byte_offset);
-        }
 
-        fseek(fp, byte_offset, SEEK_SET);
-        fwrite(&tam_buff, sizeof(int), 1, fp);
-        fwrite(buffer_aux, sizeof(char), tam_buff, fp);
+            fseek(fp, byte_offset, SEEK_SET);
+            printf("byte offset %d\n", byte_offset);
+
+            int tam_dispo;
+            fread(&tam_dispo, sizeof(int), 1, fp);
+            printf("tam dispo %d\n", tam_dispo);
+
+            int sobra = tam_dispo - tam_buff - sizeof(int);
+            printf("sobra %d\n", sobra);
+
+            fseek(fp, byte_offset, SEEK_SET);
+            fwrite(&tam_buff, sizeof(int), 1, fp);
+            fwrite(buffer_aux, sizeof(char), tam_buff, fp);
+
+            if (sobra > 0) {
+                printf("sobra > 0\n");
+                fwrite(&sobra, sizeof(int), 1, fp);
+                fwrite(&astesrisco, sizeof(char), 1, fp);
+
+                int pos_atual = ftell(fp);
+                printf("pos atual %d\n", pos_atual);
+
+                rewind(fp);
+
+                int prox_vazio;
+                fread(&prox_vazio, sizeof(int), 1, fp);
+                printf("prox vazio %d\n", prox_vazio);
+
+                rewind(fp);
+                int inicio_lista = pos_atual - sizeof(int) - 1;
+                fwrite(&inicio_lista, sizeof(int), 1, fp);
+
+                fseek(fp, pos_atual, SEEK_SET);
+                fwrite(&prox_vazio, sizeof(int), 1, fp);
+            } else {
+                fseek(fp, byte_offset, SEEK_SET);
+                fwrite(&tam_buff, sizeof(int), 1, fp);
+                fwrite(buffer_aux, sizeof(char), tam_buff, fp);
+            }
+        } else {
+            fseek(fp, byte_offset, SEEK_SET);
+            fwrite(&tam_buff, sizeof(int), 1, fp);
+            fwrite(buffer_aux, sizeof(char), tam_buff, fp);
+        }
     }
 
-    else if(funcao == 2) {
+    else if(funcao == REMOVER) {
         printf("Escolha o registro que será retirado:\n");
         int codigo_remover;
         scanf("%d", &codigo_remover);
@@ -235,7 +283,36 @@ int main() {
                 break;
             }
         }
-
     }
+
+    else if (funcao == COMPACTAR) {
+        FILE *fp_compactado = fopen("seguradoras_compactado.dad", "w+b");
+
+        int nenhum_vazio = -1;
+        fwrite(&nenhum_vazio, sizeof(int), 1, fp_compactado);
+
+        fseek(fp, sizeof(int), SEEK_SET);
+
+        while(!feof(fp)) {
+            printf("%ld\n", ftell(fp));
+
+            registro * reg = ler_registro(fp, ftell(fp));
+
+            if (reg == NULL) continue;
+
+            printf("%s\n", reg->buffer);
+
+            int tam_buffer = strlen(reg->buffer);
+            fwrite(&tam_buffer, sizeof(int), 1, fp_compactado);
+            fwrite(reg->buffer, sizeof(char), tam_buffer, fp_compactado);
+        }
+
+        // rename file to seguradoras.dad
+        remove("seguradoras.dad");
+        rename("seguradoras_compactado.dad", "seguradoras.dad");
+
+        fclose(fp_compactado);
+    }
+
     fclose(fp);
 }

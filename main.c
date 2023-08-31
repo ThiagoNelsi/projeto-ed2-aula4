@@ -294,13 +294,18 @@ int main() {
         fseek(fp, sizeof(int), SEEK_SET);
 
         while(!feof(fp)) {
+            int posicao_atual = ftell(fp);
+
+            fseek(fp, 0, SEEK_END);
+            if (ftell(fp) == posicao_atual) break;
+
+            fseek(fp, posicao_atual, SEEK_SET);
+
             printf("%ld\n", ftell(fp));
 
             registro * reg = ler_registro(fp, ftell(fp));
 
             if (reg == NULL) continue;
-
-            printf("%s\n", reg->buffer);
 
             int tam_buffer = strlen(reg->buffer);
             fwrite(&tam_buffer, sizeof(int), 1, fp_compactado);
